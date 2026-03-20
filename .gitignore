@@ -2,3 +2,10 @@
 .vscode/
 __pycache__/
 *.pyc
+
+# Ignore generated model artifacts by default.
+models/**
+!models/pretrained/
+!models/pretrained/openai_style/
+!models/pretrained/openai_style/README.md
+!models/pretrained/openai_style/breakout_openai_style_best_fp16_inference.zip
