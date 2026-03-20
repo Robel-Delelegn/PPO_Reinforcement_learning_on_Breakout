@@ -55,6 +55,10 @@ Optional stochastic policy actions:
   --stochastic
 ```
 
+## Demo Video
+
+[Watch the trained model playing Breakout](assets/breakout_ppo_demo.mp4)
+
 ## Path A: Train OpenAI-Style PPO From Scratch
 
 Train:
@@ -144,9 +148,11 @@ Or force a specific model:
 
 Using the wrong watcher can cause observation-shape errors.
 
-## Notes on Model Files and GitHub Size Limits
+## Model Files and GitHub Size Limits
 
 - GitHub rejects regular git files over 100 MB.
-- This repo tracks only one pretrained OpenAI-style checkpoint under `models/pretrained/openai_style/`.
-- Full training checkpoints under `models/openai_ppo_breakout_style/` and `models/ppo_breakout_bc/` are intentionally ignored by default.
-- If you want to publish large checkpoints, use Git LFS.
+- This repository includes one downloadable pretrained OpenAI-style checkpoint:
+  `models/pretrained/openai_style/breakout_openai_style_best_fp16_inference.zip`
+- Large rolling training checkpoints are not included in the repository because they exceed normal GitHub file limits.
+- To generate full checkpoint histories locally, run the training commands in this README.
+- If you want to publish large checkpoints yourself, use Git LFS.
