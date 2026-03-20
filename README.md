@@ -1,23 +1,54 @@
-# PPO Reinforcement Learning on Breakout
+# PPO Reinforcement Learning on Atari Breakout
 
-This repository has two complete training paths for Atari Breakout:
+End-to-end project for training Breakout agents with:
 
-1. `Human demos -> Behavior Cloning (BC) -> PPO fine-tuning`
-2. `OpenAI-style PPO from scratch` (Atari wrapper stack)
+1. **Imitation Learning + RL**: Human demonstrations -> Behavior Cloning (BC) -> PPO fine-tuning  
+2. **OpenAI-style PPO from scratch**: Atari wrapper stack and hyperparameters aligned with the classic PPO Atari recipe
 
-It also includes scripts to watch models and continue OpenAI-style training from the latest checkpoint.
+This repository is designed for practical experimentation: collect data, train, continue runs, and watch policies with minimal friction.
 
-## Repo structure
+## Contents
 
-- `collect_breakout_data.py`: collect keyboard demos and save `.npz`
-- `train_breakout_bc.py`: supervised BC training
-- `train_breakout_ppo_from_bc.py`: warm-start PPO from BC checkpoint
-- `watch_breakout_ppo.py`: watch BC/PPO-from-BC models
-- `train_breakout_ppo_openai_style.py`: OpenAI-style Atari PPO from scratch
-- `continue_breakout_ppo_openai_style.py`: continue OpenAI-style PPO training
-- `watch_breakout_ppo_openai_style.py`: watch OpenAI-style PPO models
+1. [Project Overview](#project-overview)
+2. [Repository Layout](#repository-layout)
+3. [Requirements](#requirements)
+4. [Quick Start](#quick-start)
+5. [Path A: Human Demos -> BC -> PPO](#path-a-human-demos---bc---ppo)
+6. [Path B: OpenAI-style PPO from Scratch](#path-b-openai-style-ppo-from-scratch)
+7. [Continue OpenAI-style Training](#continue-openai-style-training)
+8. [Watch Trained Models](#watch-trained-models)
+9. [Data and Model Artifacts](#data-and-model-artifacts)
+10. [Key Concepts](#key-concepts)
+11. [Troubleshooting](#troubleshooting)
+12. [GitHub Push Notes (Large Files)](#github-push-notes-large-files)
 
-## Environment setup
+## Project Overview
+
+This repo intentionally provides **two PPO environments**:
+
+- A **custom BC/PPO environment** (`ALE/Breakout-v5` + custom stack wrapper) used to warm-start PPO from imitation.
+- An **OpenAI-style Atari environment** (`BreakoutNoFrameskip-v4` + canonical wrappers) used for direct PPO baselines and continued training.
+
+The two paths are not identical by design. This makes it easier to compare:
+
+- when demonstrations help,
+- when canonical Atari shaping is enough,
+- and where environment/wrapper choices dominate outcome.
+
+## Repository Layout
+
+- `collect_breakout_data.py`: Record human gameplay to compressed `.npz` datasets.
+- `train_breakout_bc.py`: Train supervised behavior cloning actor from datasets.
+- `train_breakout_ppo_from_bc.py`: Initialize PPO from BC weights and fine-tune.
+- `watch_breakout_ppo.py`: Watch PPO models from the BC path.
+- `train_breakout_ppo_openai_style.py`: Train PPO from scratch with OpenAI-style wrappers.
+- `continue_breakout_ppo_openai_style.py`: Resume/extend an OpenAI-style PPO run.
+- `watch_breakout_ppo_openai_style.py`: Watch OpenAI-style models, including legacy checkpoint layouts.
+- `data/`: Demonstration datasets.
+- `models/`: Trained BC/PPO checkpoints.
+- `scripts/`: Auxiliary scripts.
+
+## Requirements
 
 ```bash
 python3 -m venv .venv
@@ -26,12 +57,31 @@ pip install --upgrade pip
 pip install gymnasium ale-py stable-baselines3 torch numpy pillow pygame
 ```
 
-## Path A: Demo -> BC -> PPO
+## Quick Start
 
-### 1) Collect demos
+### A) BC + PPO path
 
 ```bash
-python3 collect_breakout_data.py --output data/session3.npz
+.venv/bin/python collect_breakout_data.py --output data/session3.npz
+.venv/bin/python train_breakout_bc.py --datasets data/session2.npz data/session3.npz --output models/breakout_bc_actor.pt
+.venv/bin/python train_breakout_ppo_from_bc.py --bc-checkpoint models/breakout_bc_actor.pt --output-dir models/ppo_breakout_bc --human-render-freq 0
+.venv/bin/python watch_breakout_ppo.py --model-path models/ppo_breakout_bc/best_model/best_model.zip
+```
+
+### B) OpenAI-style PPO path
+
+```bash
+.venv/bin/python train_breakout_ppo_openai_style.py
+.venv/bin/python continue_breakout_ppo_openai_style.py --additional-timesteps 5000000 --n-envs 8
+.venv/bin/python watch_breakout_ppo_openai_style.py --output-dir models/openai_ppo_breakout_style
+```
+
+## Path A: Human Demos -> BC -> PPO
+
+### Step 1: Collect demonstrations
+
+```bash
+.venv/bin/python collect_breakout_data.py --output data/session3.npz
 ```
 
 Controls:
@@ -41,31 +91,31 @@ Controls:
 - `Space`: fire
 - `Esc`: save and exit
 
-Important behavior:
+Important defaults:
 
-- play/render defaults to `env_frameskip=1` for smooth control
-- saved dataset defaults to `frameskip=4`
-- file metadata stores both `env_frameskip` and saved `frameskip`
+- `env_frameskip=1` during play for precise control
+- saved dataset `frameskip=4`
+- saved metadata includes both `env_frameskip` and saved `frameskip`
 
-### 2) Train behavior cloning
+### Step 2: Train behavior cloning
 
 ```bash
-python3 train_breakout_bc.py \
+.venv/bin/python train_breakout_bc.py \
   --datasets data/session2.npz data/session3.npz \
   --output models/breakout_bc_actor.pt
 ```
 
-Notes:
+BC details:
 
-- all datasets in one run must share the same saved `frameskip`
-- class weighting is enabled (with `--class-weight-power`)
-- left-right augmentation is applied on training split
-- best checkpoint selection uses balanced metrics, not raw accuracy
+- class weighting via inverse-frequency weights (`--class-weight-power`)
+- left-right symmetry augmentation on the training split
+- validation reporting includes balanced accuracy, macro-F1, and per-class recall
+- best checkpoint selected by balanced metrics, not raw accuracy
 
-### 3) Train PPO from BC
+### Step 3: PPO fine-tuning from BC
 
 ```bash
-python3 train_breakout_ppo_from_bc.py \
+.venv/bin/python train_breakout_ppo_from_bc.py \
   --bc-checkpoint models/breakout_bc_actor.pt \
   --output-dir models/ppo_breakout_bc \
   --human-render-freq 0
@@ -74,142 +124,175 @@ python3 train_breakout_ppo_from_bc.py \
 Key defaults:
 
 - `total_timesteps=5_000_000`
-- `n_envs=4`, `n_steps=128`, `n_epochs=4`
+- `n_envs=4`
+- `n_steps=128`
+- `batch_size=256`
+- `n_epochs=4`
 - `frameskip=4`
 
-Artifacts:
-
-- `models/ppo_breakout_bc/ppo_bc_initialized.zip`
-- `models/ppo_breakout_bc/checkpoints/breakout_ppo_bc_*_steps.zip`
-- `models/ppo_breakout_bc/best_model/best_model.zip`
-- `models/ppo_breakout_bc/ppo_bc_final.zip`
-
-### 4) Watch PPO-from-BC
+### Step 4: Watch BC/PPO models
 
 ```bash
-python3 watch_breakout_ppo.py \
+.venv/bin/python watch_breakout_ppo.py --output-dir models/ppo_breakout_bc
+```
+
+Explicit best checkpoint:
+
+```bash
+.venv/bin/python watch_breakout_ppo.py \
   --model-path models/ppo_breakout_bc/best_model/best_model.zip
 ```
 
-If you omit `--model-path`, the watcher auto-resolves from `--output-dir` and may choose latest/final before `best_model`.
+## Path B: OpenAI-style PPO from Scratch
 
-## Path B: OpenAI-style PPO from scratch
-
-### 1) Train from scratch
+Train from scratch:
 
 ```bash
-python3 train_breakout_ppo_openai_style.py
+.venv/bin/python train_breakout_ppo_openai_style.py
 ```
 
-Default setup:
+Default environment recipe:
 
-- env: `BreakoutNoFrameskip-v4`
-- wrappers: `NoopReset -> MaxAndSkip(4) -> EpisodicLife -> FireReset -> Warp84Gray -> ClipReward -> FrameStack(4)`
-- PPO defaults: `10_000_000` timesteps, `8` envs, `n_steps=128`, `4` minibatches, `4` epochs
-- linear schedules for learning rate and clip range
+- `BreakoutNoFrameskip-v4`
+- `NoopResetEnv`
+- `MaxAndSkipEnv(skip=4)`
+- `EpisodicLifeEnv`
+- `FireResetEnv`
+- grayscale warp to `84x84`
+- `ClipRewardEnv` (`-1/0/+1`)
+- `VecFrameStack(4)`
 
-Artifacts:
+Default PPO recipe:
 
-- `models/openai_ppo_breakout_style/checkpoints/openai_style_breakout_ppo_*_steps.zip`
-- `models/openai_ppo_breakout_style/breakout_openai_style_final.zip`
+- `total_timesteps=10_000_000`
+- `n_envs=8`
+- `n_steps=128`
+- `n_minibatches=4` (effective batch size `256`)
+- `n_epochs=4`
+- linear schedules for learning rate (`2.5e-4 -> 0`) and clip range (`0.1 -> 0`)
 
-### 2) Continue training existing OpenAI-style model
+## Continue OpenAI-style Training
 
-This script loads the latest OpenAI-style model and trains it further.
+Resume an existing OpenAI-style model and train longer:
 
 ```bash
-python3 continue_breakout_ppo_openai_style.py \
+.venv/bin/python continue_breakout_ppo_openai_style.py \
   --additional-timesteps 5000000 \
   --n-envs 8
 ```
 
-What it does:
+Resume behavior:
 
-- auto-resolves latest model from `models/openai_ppo_breakout_style`
-- keeps checkpointing in the same `checkpoints/` folder
-- writes updated final alias:
-  - `breakout_openai_style_final.zip`
-- writes a numbered snapshot:
-  - `breakout_openai_style_<timesteps>_steps.zip`
+- auto-resolves model from `--model-path` or latest in `--output-dir`
+- preserves timestep counter (`reset_num_timesteps=False`)
+- writes rolling checkpoints in the same folder
+- updates final alias `breakout_openai_style_final.zip`
+- writes numbered snapshot `breakout_openai_style_<timesteps>_steps.zip`
 
-### 3) Watch OpenAI-style models
+Compatibility:
+
+- continuation script auto-detects and supports both:
+  - legacy observation layout checkpoints `(1, 336, 84)`
+  - corrected layout checkpoints `(4, 84, 84)`
+
+## Watch Trained Models
+
+### Watch OpenAI-style model
 
 ```bash
-python3 watch_breakout_ppo_openai_style.py \
+.venv/bin/python watch_breakout_ppo_openai_style.py \
   --model-path models/openai_ppo_breakout_style/breakout_openai_style_final.zip
 ```
 
-Or auto-resolve from output dir:
+Auto-resolve from output dir:
 
 ```bash
-python3 watch_breakout_ppo_openai_style.py \
+.venv/bin/python watch_breakout_ppo_openai_style.py \
   --output-dir models/openai_ppo_breakout_style
 ```
 
-## Quick start commands
-
-### BC + PPO path
+### Watch with stochastic actions
 
 ```bash
-python3 collect_breakout_data.py --output data/session3.npz
-python3 train_breakout_bc.py --datasets data/session2.npz data/session3.npz --output models/breakout_bc_actor.pt
-python3 train_breakout_ppo_from_bc.py --bc-checkpoint models/breakout_bc_actor.pt --output-dir models/ppo_breakout_bc --human-render-freq 0
-python3 watch_breakout_ppo.py --model-path models/ppo_breakout_bc/best_model/best_model.zip
+.venv/bin/python watch_breakout_ppo_openai_style.py \
+  --output-dir models/openai_ppo_breakout_style \
+  --stochastic
 ```
 
-### OpenAI-style path
+## Data and Model Artifacts
 
-```bash
-python3 train_breakout_ppo_openai_style.py
-python3 continue_breakout_ppo_openai_style.py --additional-timesteps 5000000 --n-envs 8
-python3 watch_breakout_ppo_openai_style.py --output-dir models/openai_ppo_breakout_style
-```
+### Common model outputs
 
-## Important concepts
+- `models/ppo_breakout_bc/`
+- `models/openai_ppo_breakout_style/`
 
-### What is one PPO timestep here?
+### BC path outputs
+
+- `ppo_bc_initialized.zip`
+- `ppo_bc_final.zip`
+- `checkpoints/breakout_ppo_bc_*_steps.zip`
+- `best_model/best_model.zip`
+
+### OpenAI-style outputs
+
+- `breakout_openai_style_final.zip`
+- `breakout_openai_style_<timesteps>_steps.zip`
+- `checkpoints/openai_style_breakout_ppo_*_steps.zip`
+
+## Key Concepts
+
+### What is one PPO timestep?
 
 One PPO timestep is one transition per environment:
 
-- policy sees a stacked observation
+- policy receives the current stacked observation
 - picks one action
-- `MaxAndSkip(4)` repeats that action over 4 emulator frames
-- wrapper returns one next observation + one reward signal
+- action is repeated for 4 emulator frames by `MaxAndSkip(4)`
+- env returns one reward and next observation
 
-With `n_envs=8`, each synchronized environment step advances global timesteps by 8.
+With `n_envs=8`, each synchronized vectorized step increases global timesteps by `8`.
 
 ### Reward clipping vs normalization
 
-OpenAI-style training uses reward clipping (`ClipRewardEnv`), mapping per-step reward sign to `-1/0/+1`.
+OpenAI-style path uses reward clipping (`ClipRewardEnv`), not z-score normalization:
 
-- this is not z-score normalization
-- it improves optimization stability
-- it removes reward magnitude information but keeps event frequency signal
+- positive reward -> `+1`
+- zero reward -> `0`
+- negative reward -> `-1`
+
+This improves optimization stability while sacrificing reward magnitude information.
 
 ## Troubleshooting
 
 ### `ResetNeeded: Cannot call env.render() before env.reset()`
 
-Use current scripts from this repo. This is already handled in watchers.
+Use the current watcher scripts in this repo. This order is already handled.
 
-### Observation shape mismatch while watching OpenAI-style models
+### Observation shape mismatch when watching OpenAI-style models
 
-`watch_breakout_ppo_openai_style.py` supports both:
-
-- legacy layout checkpoints (trained before frame-stack layout fix)
-- corrected layout checkpoints
-
-If mismatch still appears, ensure you are loading the model with:
+Use:
 
 ```bash
-python3 watch_breakout_ppo_openai_style.py --model-path <exact_model_zip>
+.venv/bin/python watch_breakout_ppo_openai_style.py --model-path <exact_model.zip>
 ```
 
-### OpenCV import error
+The script auto-detects legacy vs corrected checkpoint layouts.
 
-OpenAI-style scripts in this repo use Pillow-based grayscale/resize wrapper, so `opencv-python` is not required for that path.
+### `Model file not found`
 
-## Notes on current local data
+Double-check the exact model path and extension (`.zip`).
 
-- `data/session1_frameskip1_backup.npz`: backup from older collection format
-- `data/session2.npz`, `data/session3.npz`: current datasets used by BC runs
+### PPO watcher chooses final model instead of best model
+
+Pass `--model-path` explicitly to enforce the exact checkpoint.
+
+## GitHub Push Notes (Large Files)
+
+This project can produce many large model checkpoints. GitHub normal git pushes reject files larger than 100 MB.
+
+If you want to version large checkpoints/datasets in GitHub:
+
+- use Git LFS, or
+- keep large artifacts out of git and publish them as release assets or external storage links.
+
+For normal code-only updates, commit scripts and README only.
