@@ -57,7 +57,10 @@ Optional stochastic policy actions:
 
 ## Demo Video
 
-[Watch the trained model playing Breakout](assets/breakout_ppo_demo.mp4)
+<video controls width="860" src="https://github.com/Robel-Delelegn/PPO_Reinforcement_learning_on_Breakout/raw/main/assets/breakout_ppo_demo.mp4"></video>
+
+If video playback does not start in your browser, use the direct file link:
+[assets/breakout_ppo_demo.mp4](assets/breakout_ppo_demo.mp4)
 
 ## Path A: Train OpenAI-Style PPO From Scratch
 
@@ -140,6 +143,67 @@ Or force a specific model:
 .venv/bin/python watch_breakout_ppo.py \
   --model-path models/ppo_breakout_bc/best_model/best_model.zip
 ```
+
+## Training Transparency (Default Config)
+
+All values below are script defaults. You can override them with CLI flags.
+
+### OpenAI-style PPO (`train_breakout_ppo_openai_style.py`)
+
+- Env: `BreakoutNoFrameskip-v4`
+- Wrappers: `NoopReset -> MaxAndSkip(4) -> EpisodicLife -> FireReset -> Warp84Gray -> ClipReward -> FrameStack(4)`
+- Total timesteps: `10,000,000`
+- Parallel envs: `8`
+- Rollout length (`n_steps`): `128`
+- Rollout size per PPO iteration: `8 * 128 = 1,024` transitions
+- Minibatches: `4` -> minibatch size `256`
+- PPO epochs per iteration: `4`
+- Approx PPO iterations for 10M steps: `10,000,000 / 1,024 ~= 9,766`
+- Learning rate: linear schedule `2.5e-4 -> 0`
+- Clip range: linear schedule `0.1 -> 0`
+- Gamma / GAE lambda: `0.99 / 0.95`
+- Entropy / value coefficients: `0.01 / 0.5`
+- Max grad norm: `0.5`
+- Checkpoint frequency: every `1,000,000` env steps
+
+### Continue OpenAI-style PPO (`continue_breakout_ppo_openai_style.py`)
+
+- Loads latest model from output directory unless `--model-path` is passed
+- Additional timesteps per run: `5,000,000` (default)
+- Parallel envs during continuation: `8` (default)
+- Keeps global step counter (`reset_num_timesteps=False`)
+
+### Behavior Cloning (`train_breakout_bc.py`)
+
+- Input: stacked grayscale observations of shape `(4, 84, 84)`
+- Default epochs: `20`
+- Batch size: `256`
+- Learning rate: `1e-4`
+- Weight decay: `1e-5`
+- Validation split: `10%`
+- Class weighting: inverse-frequency, power `1.0`
+- Data augmentation: left-right flip of observations, with label swap `LEFT <-> RIGHT`
+
+### Custom PPO from BC (`train_breakout_ppo_from_bc.py`)
+
+- Env: `ALE/Breakout-v5`, `obs_type=grayscale`, `full_action_space=False`
+- Env frameskip: `4`
+- Repeat action probability: `0.0`
+- Observation wrapper: custom crop/resize/max-over-last-frame + frame stack
+- Total timesteps: `5,000,000`
+- Parallel envs: `4`
+- Rollout length (`n_steps`): `128`
+- Rollout size per PPO iteration: `4 * 128 = 512` transitions
+- Batch size: `256`
+- PPO epochs per iteration: `4`
+- Approx PPO iterations for 5M steps: `5,000,000 / 512 ~= 9,766`
+- Learning rate: constant `2.5e-4`
+- Clip range: constant `0.1`
+- Gamma / GAE lambda: `0.99 / 0.95`
+- Entropy / value coefficients: `0.01 / 0.5`
+- Max grad norm: `0.5`
+- Eval frequency: every `50,000` env steps, `5` episodes
+- Checkpoint frequency: every `100,000` env steps
 
 ## Which Script Should I Use to Watch Which Model?
 
