@@ -214,9 +214,8 @@ Using the wrong watcher can cause observation-shape errors.
 
 ## Model Files and GitHub Size Limits
 
-- GitHub rejects regular git files over 100 MB.
 - This repository includes one downloadable pretrained OpenAI-style checkpoint:
   `models/pretrained/openai_style/breakout_openai_style_best_fp16_inference.zip`
 - Large rolling training checkpoints are not included in the repository because they exceed normal GitHub file limits.
 - To generate full checkpoint histories locally, run the training commands in this README.
-- If you want to publish large checkpoints yourself, use Git LFS.
+
